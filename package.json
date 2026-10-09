@@ -1,0 +1,26 @@
+{
+  "name": "wetterwarte",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "test": "tsx --test tests/calculations.test.ts",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "proj4": "2.19.10",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vite": "6.4.4"
+  },
+  "dependencies": {
+    "suncalc": "2.1.1"
+  }
+}

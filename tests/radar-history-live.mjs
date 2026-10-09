@@ -1,0 +1,35 @@
+import {navigate} from './navigation.mjs';
+import { chromium } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+await mkdir('.audit',{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});
+let interval;
+try {
+  const context=await browser.newContext({viewport:{width:1440,height:1050}});
+  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('http://127.0.0.1:4173/');
+  await navigate(page,'nav [data-view="radar"]');
+  await page.locator('[data-mode="live"]').click();
+  await page.waitForFunction(()=>document.querySelector('.radar-map .radar-rain')||document.querySelector('.error-banner'),null,{timeout:40000});
+  if(!await page.locator('.radar-map .radar-rain').count())throw Error(await page.locator('.device-content').innerText());
+  console.log('DWD radar:',await page.locator('.radar-time').innerText());
+  await page.locator('#radar-time').fill('3');await page.locator('#radar-time').dispatchEvent('change');
+  await page.waitForFunction(()=>document.querySelector('.radar-map .radar-rain')&&!document.querySelector('.radar-unavailable'),null,{timeout:30000});
+  await page.screenshot({path:'.audit/live-radar.png'});
+  console.log('Historical radar frame loaded.');
+  await navigate(page,'nav [data-view="climate"]');await navigate(page,'[data-climate-tab="history"]');
+  let last='';interval=setInterval(async()=>{try{const s=await page.locator('.loading-text').textContent({timeout:500});if(s!==last){console.log(s);last=s;}}catch{}},7000);
+  await page.waitForFunction(()=>document.querySelector('.history-chart')||document.querySelector('.error-banner'),null,{timeout:240000});clearInterval(interval);
+  if(!await page.locator('.history-chart').count())throw Error(await page.locator('.device-content').innerText());
+  console.log('ERA5 history:',await page.locator('.history-heading').innerText());
+  console.log('Last year:',await page.locator('.year-values').innerText());
+  await page.screenshot({path:'.audit/live-history.png'});
+  await page.locator('#history-year').selectOption('1961');
+  if(await page.locator('#history-year').inputValue()!=='1961')throw Error('Year selection failed');
+  await context.setOffline(true);await navigate(page,'nav [data-view="radar"]');
+  await page.waitForFunction(()=>document.querySelector('.radar-map .radar-rain')&&!document.querySelector('.radar-unavailable'));
+  console.log('Radar image cache available offline.');
+  if(errors.length)throw Error(errors.join('\n'));
+  await writeFile('.audit/live-check.txt','DWD manifest + recent/past radar frames, ERA5 1961–2025, year selection, offline image cache: passed.\n');
+  console.log('RADAR + HISTORY LIVE PASSED');
+}finally{clearInterval(interval);await browser.close();}

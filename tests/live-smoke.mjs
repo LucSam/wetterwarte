@@ -1,0 +1,34 @@
+import {navigate} from './navigation.mjs';
+import { chromium } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+await mkdir('test-results',{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const context=await browser.newContext({viewport:{width:1440,height:1050}});
+const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+let interval;
+try{
+  await page.goto('http://127.0.0.1:5173/');
+  await page.locator('[data-mode="live"]').click();
+  await page.waitForFunction(()=>document.querySelector('.temperature')||document.querySelector('.error-banner'),null,{timeout:65000});
+  console.log('Weather:',await page.locator('.device-content').innerText());
+  if(!await page.locator('.temperature').count())throw Error('Live weather unavailable');
+  await navigate(page,'[data-view="compare"]');
+  await page.waitForFunction(()=>document.querySelector('.comparison-plot')||document.querySelector('.error-banner'),null,{timeout:65000});
+  console.log('Ensemble:',await page.locator('.compare-legend').innerText());
+  await navigate(page,'[data-view="climate"]');
+  await navigate(page,'[data-climate-tab="projection"]');
+  let last='';
+  interval=setInterval(async()=>{try{const text=await page.locator('.loading-text').textContent({timeout:1000});if(text!==last){console.log('Climate:',text);last=text;}}catch{}},5000);
+  await page.waitForFunction(()=>document.querySelector('.climate-summary')||document.querySelector('.error-banner'),null,{timeout:600000});clearInterval(interval);
+  console.log('Climate result:',await page.locator('.device-content').innerText());
+  await page.screenshot({path:'test-results/live-climate.png'});
+  const cache=await page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('wetterwarte-v1');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});return await new Promise(resolve=>{const r=db.transaction('data').objectStore('data').getAll();r.onsuccess=()=>resolve(r.result);});});
+  await writeFile('test-results/live-data.json',JSON.stringify(cache));
+  if(!await page.locator('.climate-summary').count())throw Error('Live climate unavailable');
+  await context.setOffline(true);await navigate(page,'[data-view="weather"]');
+  await page.locator('[data-action="refresh"]').click();
+  console.log('Offline:',await page.locator('.data-badge').innerText());
+  if(!await page.locator('.temperature').count())throw Error('Cached weather lost offline');
+  if(errors.length)throw Error(errors.join('\n'));
+  console.log('LIVE SMOKE PASSED');
+}finally{clearInterval(interval);await browser.close();}
