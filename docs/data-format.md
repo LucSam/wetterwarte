@@ -97,3 +97,9 @@ Der Wetterexport ergänzt `astronomy: {time, phase, illuminated, waxing, label, 
 
 
 `kind: weather` ergänzt optional `outlook: {model, source, fetchedAt, places: [{id, days: [{date, min, max, rain, probability, code}]}]}`. `date` ist ein Berliner Kalendertag (YYYY-MM-DD), Temperatur in °C, tägliche Regensumme in mm, Wahrscheinlichkeit in Prozent und `code` ein WMO-Wettercode. Der Live-Modellname lautet `ecmwf_ifs025`. 14 Tageswerte werden separat von den `icon_eu`-Stundenreihen gespeichert, ohne zeitliche Interpolation zwischen Modellen. Fehlt die Abfrage, enthält `outlookError` die Fehlerbeschreibung. Bestehende Exporte ohne `outlook` bleiben lesbar.
+
+## Temperaturstatistik
+
+`kind: temperature-history`, `model: era5`, `place`, `unit: °C`, gemeinsame Herkunftsfelder und `years: [{year, fetchedAt, mean, min, max}]`. Die drei Zahlenarrays haben je 365 oder 366 Einträge; Index 0 ist der 1. Januar im Kalender Europe/Berlin. Es gibt keine Unixzeit-Achse für diese Kalenderaggregate. Fehlende oder noch nicht verfügbare Tage sind `null`. Jeder Jahresblock besitzt seinen eigenen Abrufzeitpunkt in Unixsekunden UTC; der Zeitstempel des Produkts bezeichnet die letzte Ergänzung, nicht das Alter aller archivierten Jahre.
+
+Die Anzeige berechnet aus diesen Tagesarrays die ausgewählten Monats-/Jahresaggregate und Referenzbänder in `src/temperature-stats.ts`. Referenzwahl und Anzeigezeitraum werden getrennt in `wetterwarte-temperature` gespeichert. Rohdaten sind dadurch bei einer anderen Referenzwahl wiederverwendbar. Für einen Mikrocontroller sollten nur die ausgewählten 12–31 Plotpunkte mit Mittel/Min/Max, Referenzmittel/SD, Anzahl der Referenzjahre und die tatsächlichen Referenzgrenzen übertragen werden; der vollständige 30-Jahres-Tagescache ist für Browser/Raspberry Pi gedacht.

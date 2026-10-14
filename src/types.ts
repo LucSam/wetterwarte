@@ -4,7 +4,7 @@ export type Mode = 'demo' | 'live';
 export type View = 'weather' | 'radar' | 'climate' | 'compare' | 'clock';
 export interface Place { id: PlaceId; name: string; detail: string; lat: number; lon: number }
 export interface Meta {
-  schema: 1; kind: 'weather' | 'ensemble' | 'climate' | 'history' | 'radar' | 'climate-map'; mode: Mode;
+  schema: 1; kind: 'weather' | 'ensemble' | 'climate' | 'history' | 'radar' | 'climate-map' | 'temperature-history'; mode: Mode;
   source: string; fetchedAt: number; runAt: number | null; timezone: 'Europe/Berlin';
 }
 export interface Current { time: number; temperature: Num; wind: Num; direction: Num; code: Num }
@@ -28,6 +28,9 @@ export interface HistoryYear { year: number; temperature: number; hotDays: numbe
 export interface History extends Meta { kind: 'history'; place: PlaceId; model: 'era5'; baseline: [number, number]; years: HistoryYear[] }
 export interface Radar extends Meta { kind: 'radar'; model: 'dwd_rv'; time: number[]; frameErrors: number[] }
 export interface ClimateField extends Meta { kind:'climate-map'; baseline:[number,number]; recent:[number,number]; nativeResolutionKm:number; displayResolutionKm:number; cells:{polygon:number[][];baseline:number;recent:number}[] }
-export type Dataset = Weather | Ensemble | Climate | History | Radar | ClimateField;
+/** Array index = local calendar day since January 1; null = missing. */
+export interface TemperatureYear { year:number; mean:Num[]; min:Num[]; max:Num[]; fetchedAt:number }
+export interface TemperatureArchive extends Meta { kind:'temperature-history'; place:PlaceId; model:'era5'; unit:'°C'; years:TemperatureYear[] }
+export type Dataset = Weather | Ensemble | Climate | History | Radar | ClimateField | TemperatureArchive;
 export type Theme = 'auto' | 'light' | 'dark';
 export interface Settings { theme:Theme; mode: Mode; place: PlaceId; view: View; size: '480x320' | '480' | '800' | '1280' }

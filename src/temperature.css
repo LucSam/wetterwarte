@@ -1,0 +1,38 @@
+/* Native-pixel charts, including 480 × 320: no scaled-down plotting fonts. */
+.climate-content:has(.temperature-history){display:flex!important;flex-direction:column;overflow:hidden!important}
+.temperature-history{display:flex;flex-direction:column;flex:1;min-height:0;gap:8px;--reference-band:#5e697737}
+:root[data-theme=dark] .temperature-history{--reference-band:#b6c2d333}
+.temperature-controls{display:flex;gap:8px;flex-shrink:0}
+.temperature-controls select{min-width:0;background:var(--hover);border:0;border-radius:7px;font-size:15px;font-weight:600;padding:4px 10px;height:44px}
+.temperature-controls .temperature-plot-choice{display:block;margin-left:auto}
+.temperature-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-shrink:0}
+.temperature-heading h1{font-size:24px}.temperature-heading>span{font-size:14px;color:var(--text)}
+.temperature-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;flex-shrink:0}
+.temperature-summary>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.temperature-summary span{font-size:14px;white-space:nowrap}.temperature-summary strong{font-size:32px;font-weight:600;line-height:1.1;white-space:nowrap}.temperature-summary small{font-size:17px;font-weight:600}
+.temperature-summary .stat-min strong,.temperature-summary .colder{color:var(--cold)}.temperature-summary .stat-max strong,.temperature-summary .warmer{color:var(--warm)}
+.temperature-charts{display:flex;flex:1;min-height:0}
+.temperature-figure{display:flex;flex:1;min-width:0;min-height:0;margin:0}.temperature-plot{flex:1;min-width:0;min-height:0;position:relative}
+.temperature-plot svg{position:absolute;inset:0;width:100%;height:100%}.temperature-plot svg text{font:600 13px Helvetica,Arial,sans-serif;fill:var(--text)}.temperature-plot .plot-title{font-weight:600}
+.temperature-plot .plot-grid{stroke:var(--text);stroke-opacity:.09;stroke-width:1}.temperature-plot .plot-zero{stroke:var(--text);stroke-opacity:.5;stroke-width:1.5}
+.temperature-plot path{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.temperature-plot .plot-min{stroke:var(--cold)}.temperature-plot .plot-max{stroke:var(--warm)}.temperature-plot .plot-mean{stroke:var(--text);stroke-width:2.4}.temperature-plot circle.plot-min,.temperature-plot .plot-cold{fill:var(--cold)}.temperature-plot circle.plot-max,.temperature-plot .plot-warm{fill:var(--warm)}.temperature-plot circle.plot-mean{fill:var(--text)}
+.temperature-plot .plot-reference{stroke:var(--muted);stroke-dasharray:5 5;stroke-width:1.6}.temperature-plot .plot-band{fill:var(--reference-band)}
+.temperature-legend{display:flex;align-items:center;gap:18px;flex-shrink:0;font-size:14px;font-weight:600}
+.temperature-anomaly-legend{display:flex;gap:14px;flex-shrink:0;font-size:14px;font-weight:600}.temperature-anomaly-legend .colder{color:var(--cold)}.temperature-anomaly-legend .warmer{color:var(--warm)}
+.temperature-legend>span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.temperature-legend>span:before{content:'';width:19px;height:3px;background:var(--text)}.temperature-legend .legend-min:before{background:var(--cold)}.temperature-legend .legend-max:before{background:var(--warm)}.temperature-legend .legend-reference:before{height:0;background:none;border-top:2px dashed var(--muted)}.temperature-legend .legend-spread:before{height:12px;background:var(--reference-band)}
+.temperature-source{display:flex;justify-content:space-between;gap:8px;font-size:13px;line-height:1.2;flex-shrink:0;min-height:16px}.temperature-source>span{min-width:0}.temperature-source>span:last-child{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@container (max-width:850px){
+ .temperature-history{gap:6px}.temperature-heading h1{font-size:20px}.temperature-summary strong{font-size:27px}.temperature-summary span{font-size:13px}.temperature-summary small{font-size:15px}
+}
+@container (max-width:550px){
+ .temperature-history{gap:4px}.temperature-controls{gap:3px}.temperature-controls select{font-size:12px;padding:3px 2px;flex:1;width:0}.temperature-controls #temperature-reference{flex:1.5}.temperature-controls #temperature-plot{flex:1.4}.temperature-controls #temperature-year{flex:.85}
+ .temperature-controls .temperature-plot-choice{display:block}.temperature-heading h1{font-size:17px}.temperature-heading>span{font-size:12px}.temperature-summary{gap:5px}.temperature-summary strong{font-size:23px}.temperature-summary small{font-size:12px}.temperature-summary span{font-size:12px}.temperature-summary>div{gap:2px}
+ .temperature-anomaly-legend{font-size:12px}
+ .temperature-legend{font-size:12px;gap:10px}.temperature-legend>span{gap:4px}.temperature-legend>span:before{width:12px}.temperature-source{font-size:12px;min-height:15px}
+ .temperature-plot svg text{font-size:12px}
+}
+@container (max-height:360px){
+ .temperature-heading{display:none}.temperature-summary strong{font-size:22px}.temperature-summary small{font-size:12px}.temperature-history{gap:3px}
+ .temperature-summary>div>span:last-child{font-size:11px;font-weight:600}.temperature-source{font-size:11px;font-weight:600;min-height:13px}
+}

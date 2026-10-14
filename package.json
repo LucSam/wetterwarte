@@ -1,6 +1,6 @@
 {
   "name": "wetterwarte",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,7 +10,7 @@
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
-    "test": "tsx --test tests/calculations.test.ts",
+    "test": "tsx --test tests/*.test.ts",
     "test:browser": "playwright test"
   },
   "devDependencies": {

@@ -7,6 +7,10 @@ import { moonAt, daylightAt } from './data/astronomy';
 import './style.css';
 import './compact.css';
 import './display-preview.css';
+import './temperature.css';
+import { demoTemperature, fetchTemperature, temperatureKey, temperatureNeedsFetch } from './data/temperature';
+import { requiredYears } from './temperature-stats';
+import { temperatureView, fitTemperatureCharts, readTemperatureOptions, saveTemperatureOptions } from './ui/temperature-view';
 import { preview, previewControls, fitSmallChartLabels, setPreviewMode, calibratePreview, updateDisplayPreview, DISPLAY_PROFILES } from './ui/display-preview';
 import { demoHistory, fetchHistory, HISTORY_END } from './data/history';
 import { demoRadar, fetchRadar, preloadRadar, loadRadarFrame, radarFrameUrl, radarNowIndex, radarExpired, radarKey } from './data/radar';
@@ -19,7 +23,7 @@ import { ENSEMBLE_TTL, PLACES, WEATHER_TTL } from './config';
 import { fetchClimate, fetchEnsemble, fetchWeather, now } from './data/api';
 import { readCache, readSettings, saveSettings, storageWarning, writeCache } from './data/cache';
 import { demoClimate, demoEnsemble, demoWeather } from './data/demo';
-import type { Climate, Dataset, Ensemble, History, Radar, ClimateField, PlaceId, View, Weather } from './types';
+import type { Climate, Dataset, Ensemble, History, Radar, ClimateField, PlaceId, View, Weather, TemperatureArchive } from './types';
 import { escapeHtml as esc } from './ui/charts';
 import { climateIntro, climateView, clockView, compareView, empty, weatherView, type ClimateMetric } from './ui/views';
 
@@ -36,15 +40,19 @@ let step=0, weatherPage='overview', outlookWeek=0, moonDay=0, metric:ClimateMetr
 let renderedView='',focusOffset=0,placeMenu=false,openMenu:''|'view'|'section'|'place'='';
 let bufferRun=0,bufferBusy=false,bufferFailures=0,playWhenReady=false,bufferGeneration=0,bufferAttempt=0;
 let demoW=demoWeather(), demoR=demoRadar();
-let climateTab:'map'|'history'|'projection'='map', selectedYear=HISTORY_END, radarFrame=-1, radarPlaying=false,radarPinnedTime:number|undefined;
+let climateTab:'map'|'history'|'projection'|'temperature'='map', selectedYear=HISTORY_END, radarFrame=-1, radarPlaying=false,radarPinnedTime:number|undefined;
+try{const tab=localStorage.getItem('wetterwarte-climate-tab');if(['map','history','projection','temperature'].includes(tab??''))climateTab=tab as typeof climateTab;}catch{/* In-memory navigation still works. */}
+const temperatureOptions=readTemperatureOptions();
+let temperatureProgress='',temperatureLoading=false;
 let climateLayer:ClimateLayer='change',climateCell=-1,backgroundLoading=false,backgroundMessage='';
 const attempts=new Map<string,number>();
 const radarLoading=new Set<string>(), radarErrors=new Map<string,string>();
 const live=new Map<string,Dataset>(), busy=new Set<string>(), errors=new Map<string,string>();
 let climateController:AbortController|undefined, climateProgress='';
-const keyFor=(view:View=settings.view,place:PlaceId=settings.place)=>view==='radar'?'radar-v2':view==='climate'?(climateTab==='map'?`climate-map-${settings.mode}`:climateTab==='history'?`history-v1-${place}`:`climate-v1-${place}`):view==='compare'?`ensemble-v1-${place}`:'weather-v1';
+const keyFor=(view:View=settings.view,place:PlaceId=settings.place)=>view==='radar'?'radar-v2':view==='climate'?(climateTab==='map'?`climate-map-${settings.mode}`:climateTab==='history'?`history-v1-${place}`:climateTab==='temperature'?temperatureKey(place):`climate-v1-${place}`):view==='compare'?`ensemble-v1-${place}`:'weather-v1';
 const message=(error:unknown)=>error instanceof Error ? (error.name==='TimeoutError'?'Zeitüberschreitung beim Datenabruf.':error.name==='TypeError'?'Datenquelle nicht erreichbar. Netzwerk oder Browserzugriff prüfen.':error.message):String(error);
 function dataset():Dataset|undefined {
+  if(settings.view==='climate'&&climateTab==='temperature')return settings.mode==='demo'?demoTemperature(settings.place,temperatureOptions):live.get(temperatureKey(settings.place));
   if(settings.mode==='demo')return settings.view==='radar'?demoR:settings.view==='climate'?(climateTab==='map'?live.get('climate-map-demo'):climateTab==='history'?demoHistory(settings.place):demoClimate(settings.place)):settings.view==='compare'?demoEnsemble(settings.place):demoW;
   return live.get(keyFor());
 }
@@ -56,7 +64,7 @@ function status(d:Dataset|undefined) {
   if(settings.view==='radar'&&mapLayer!=='rain'){const layer=mapLayer,field=layer==='air'?air:fields.get(layer);return !field?['unavailable',fieldBusy.has(layer)?'Karte wird geladen':'Keine Daten']:!navigator.onLine||fieldErrors.has(layer)||now()-field.fetchedAt>(layer==='air'?86400:3600)?['stale','Gespeicherte Karte / Ortswerte']:['live','Modelldaten'];}
   if(d?.kind==='climate-map')return ['stored','DWD · Klimaraster'];
   if(d?.kind==='climate')return ['stored','Gespeicherte Projektion'];
-  if(d?.kind==='history')return ['stored','ERA5 · Reanalyse'];
+  if(d?.kind==='history'||d?.kind==='temperature-history')return ['stored','ERA5 · Reanalyse'];
   if(d?.kind==='radar')return stale(d)||!navigator.onLine||errors.has(keyFor())?['stale','Radar · gespeichert'+(stale(d)?' · veraltet':'')]:['live','DWD · Nowcast'];
   if(d && (stale(d)||!navigator.onLine||errors.has(keyFor())))return ['stale',`Gespeichert${stale(d)?' · veraltet':''}`];
   if(d)return ['live','Echte Modelldaten'];
@@ -67,6 +75,7 @@ function content() {
   if(settings.view==='radar'&&mapLayer!=='rain')return layerTabs(mapLayer)+(mapLayer==='air'?airView(settings.mode==='demo'?demoAir():air,settings.place,fieldBusy.has('air'),fieldErrors.get('air'),fieldStep,fieldPlaying):fieldView(settings.mode==='demo'?demoField(mapLayer):fields.get(mapLayer),mapLayer,settings.place,fieldStep,fieldBusy.has(mapLayer),fieldErrors.get(mapLayer),fieldPlaying,fieldWaiting));
   if(settings.view==='clock')return clockView(weather(),settings.place);
   if(settings.view==='climate') {
+    if(climateTab==='temperature')return temperatureView(d?.kind==='temperature-history'?d:undefined,temperatureOptions,settings.mode==='demo'?'':temperatureProgress,settings.mode==='demo'?'':errors.get(key)??'',navigator.onLine);
     const tabs=`<div class="climate-mode-tabs" role="group" aria-label="Klimazeitraum"><button data-climate-tab="map" aria-pressed="${climateTab==='map'}">Karte</button><button data-climate-tab="history" aria-pressed="${climateTab==='history'}">Verlauf</button><button data-climate-tab="projection" aria-pressed="${climateTab==='projection'}">Zukunft</button></div>`;
     return tabs+(climateTab==='map'?(d?.kind==='climate-map'?climateMapView(d,climateLayer,settings.place,climateCell):empty('Klimakarte wird vorbereitet …','DWD-Flächenraster werden lokal geladen.')):climateTab==='history'?(d?.kind==='history'?historyView(d,selectedYear):historyIntro(busy.has(key),esc(climateProgress))):(d?.kind==='climate'?climateView(d,metric):climateIntro(busy.has(key),climateProgress)));
   }
@@ -85,7 +94,7 @@ const chevron='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 6 5 5 5-5
 function sectionOptions(){
  if(settings.view==='weather')return {attribute:'weather-page',current:weatherPage,items:[['overview','Übersicht'],['focus','Fokus'],['hours','Stunden'],...(settings.size==='480x320'?[['days','Tage']]:[]),['forecast','Verlauf'],['moon','Mond']]};
  if(settings.view==='radar')return {attribute:'map-layer',current:mapLayer,items:[['rain','Regen'],['temperature','Temperatur'],['wind','Wind'],['air','Luftqualität']]};
- if(settings.view==='climate')return {attribute:'climate-tab',current:climateTab,items:[['map','Karte'],['history','Verlauf'],['projection','Zukunft']]};
+ if(settings.view==='climate')return {attribute:'climate-tab',current:climateTab,items:[['map','Karte'],['history','Verlauf'],['projection','Zukunft'],['temperature','Temperatur']]};
  return undefined;
 }
 function deviceHeader(){
@@ -112,11 +121,12 @@ function render() {
   // Reuse the displayed raster across DOM rebuilds. updateDisplayPreview swaps
   // it only after the new image is ready, so menus never flash a live CSS view.
   const previousRaster=app.querySelector<HTMLCanvasElement>('canvas.native-display-canvas');
-  app.innerHTML=`<main class="workbench" data-preview="${preview.mode}"><div class="preview-toolbar"><div class="project-label"><span>WETTERWARTE <small>BILDSCHIRMVORSCHAU</small></span></div><div class="size-control" role="group" aria-label="Vorschaugröße">${[['480x320','480 × 320 · 3,5″'],['480','480 × 480'],['800','800 × 480'],['1280','1280 × 720']].map(([size,label])=>`<button data-size="${size}" aria-pressed="${settings.size===size}">${label}</button>`).join('')}</div><button class="export-button" data-action="export" ${!d&&!(settings.view==='radar'&&mapLayer!=='rain')?'disabled':''}>JSON exportieren</button></div>${previewControls(settings.size)}<div class="device-wrap"><div class="device-stage"><article class="device menu-navigation size-${settings.size} view-${settings.view}" aria-label="Wetterdisplay ${settings.size} Pixel">${deviceHeader()}<div class="device-content ${settings.view}-content" id="view-content">${error&&settings.view!=='radar'?`<div class="error-banner" role="status">${esc(error)}</div>`:''}${!navigator.onLine&&settings.view!=='radar'?'<div class="error-banner">Offline · lokal gespeicherte Daten</div>':''}${storageWarning?`<div class="error-banner">${esc(storageWarning)}</div>`:''}${content()}</div>${(['demo','stale','unavailable'].includes(badge)||settings.view==='radar')?`<footer class="device-footer state-footer"><span class="data-badge ${badge}">${['demo','stale','unavailable'].includes(badge)?label:''}</span></footer>`:''}</article></div></div><div class="preview-bottom"><div class="mode-control"><span>Datenmodus</span><button data-mode="demo" aria-pressed="${settings.mode==='demo'}">Demo</button><button data-mode="live" aria-pressed="${settings.mode==='live'}">Echte Daten</button></div><div class="theme-control" role="group" aria-label="Darstellung"><span>Darstellung</span>${[['auto','Auto'],['light','Hell'],['dark','Dunkel']].map(([theme,label])=>`<button data-theme="${theme}" aria-pressed="${settings.theme===theme}">${label}</button>`).join('')}<small title="Sonnenaufgang ${solar.sunrise?clockTime(solar.sunrise):'–'} · Sonnenuntergang ${solar.sunset?clockTime(solar.sunset):'–'}">${settings.theme==='auto'?`${resolved==='light'?'Tag':'Nacht'} · hell ${solar.sunrise?clockTime(solar.sunrise):'–'}–${solar.sunset?clockTime(solar.sunset):'–'}`:'Manuell'}</small></div><p>${settings.mode==='demo'?'Offline gestaltbar · Wetter/Klima: Beispiele; Uhr/Mond: aktuelle Zeit':'Direkter API-Abruf · Daten bleiben lokal'}<span>${DISPLAY_PROFILES[settings.size].name} · Touch / Maus</span></p></div><div class="background-progress" role="status">${settings.mode==='live'?(climateController?esc(climateProgress):backgroundMessage):''}</div><div id="export-message" role="status"></div></main>`;
+  app.innerHTML=`<main class="workbench" data-preview="${preview.mode}"><div class="preview-toolbar"><div class="project-label"><span>WETTERWARTE <small>BILDSCHIRMVORSCHAU</small></span></div><div class="size-control" role="group" aria-label="Vorschaugröße">${[['480x320','480 × 320 · 3,5″'],['480','480 × 480'],['800','800 × 480'],['1280','1280 × 720']].map(([size,label])=>`<button data-size="${size}" aria-pressed="${settings.size===size}">${label}</button>`).join('')}</div><button class="export-button" data-action="export" ${!d&&!(settings.view==='radar'&&mapLayer!=='rain')?'disabled':''}>JSON exportieren</button></div>${previewControls(settings.size)}<div class="device-wrap"><div class="device-stage"><article class="device menu-navigation size-${settings.size} view-${settings.view}" aria-label="Wetterdisplay ${settings.size} Pixel">${deviceHeader()}<div class="device-content ${settings.view}-content" id="view-content">${error&&settings.view!=='radar'&&!temperatureActive()?`<div class="error-banner" role="status">${esc(error)}</div>`:''}${!navigator.onLine&&settings.view!=='radar'&&!temperatureActive()?'<div class="error-banner">Offline · lokal gespeicherte Daten</div>':''}${storageWarning?`<div class="error-banner">${esc(storageWarning)}</div>`:''}${content()}</div>${((['demo','stale','unavailable'].includes(badge)||settings.view==='radar')&&!temperatureActive())?`<footer class="device-footer state-footer"><span class="data-badge ${badge}">${['demo','stale','unavailable'].includes(badge)?label:''}</span></footer>`:''}</article></div></div><div class="preview-bottom"><div class="mode-control"><span>Datenmodus</span><button data-mode="demo" aria-pressed="${settings.mode==='demo'}">Demo</button><button data-mode="live" aria-pressed="${settings.mode==='live'}">Echte Daten</button></div><div class="theme-control" role="group" aria-label="Darstellung"><span>Darstellung</span>${[['auto','Auto'],['light','Hell'],['dark','Dunkel']].map(([theme,label])=>`<button data-theme="${theme}" aria-pressed="${settings.theme===theme}">${label}</button>`).join('')}<small title="Sonnenaufgang ${solar.sunrise?clockTime(solar.sunrise):'–'} · Sonnenuntergang ${solar.sunset?clockTime(solar.sunset):'–'}">${settings.theme==='auto'?`${resolved==='light'?'Tag':'Nacht'} · hell ${solar.sunrise?clockTime(solar.sunrise):'–'}–${solar.sunset?clockTime(solar.sunset):'–'}`:'Manuell'}</small></div><p>${settings.mode==='demo'?'Offline gestaltbar · Wetter/Klima: Beispiele; Uhr/Mond: aktuelle Zeit':'Direkter API-Abruf · Daten bleiben lokal'}<span>${DISPLAY_PROFILES[settings.size].name} · Touch / Maus</span></p></div><div class="background-progress" role="status">${settings.mode==='live'?(climateController?esc(climateProgress):backgroundMessage):''}</div><div id="export-message" role="status"></div></main>`;
   if(previousRaster&&preview.mode!=='layout'&&previousRaster.width===DISPLAY_PROFILES[settings.size].width&&previousRaster.height===DISPLAY_PROFILES[settings.size].height)app.querySelector('.device-stage')?.append(previousRaster);
   fitClock();
   fitRegionalMaps();
   fitSmallChartLabels();
+  fitTemperatureCharts();
   void updateDisplayPreview(settings.size);
   document.querySelector('#view-content')!.scrollTop=scroll;renderedView=settings.view;
   updateRadarBuffer();
@@ -158,7 +168,7 @@ async function loadClimate() {
     const data=await fetchClimate(place,msg=>{climateProgress=msg;render();},controller.signal);
     live.set(key,data);await writeCache(key,data);
   }catch(e){errors.set(key,controller.signal.aborted?'Klimaabruf abgebrochen. Vollständige Teilabrufe bleiben gespeichert.':message(e));}
-  finally{busy.delete(key);if(climateController===controller)climateController=undefined;render();}
+  finally{busy.delete(key);if(climateController===controller)climateController=undefined;render();if(temperatureActive())void loadTemperature();}
 }
 function radarActiveKey(){const d=radar();return d?radarKey(d.time[radarNowIndex(d)],d.runAt!):'';}
 function radarIndex(data:Radar) { if(radarFrame<0)return radarNowIndex(data);const exact=radarPinnedTime===undefined?-1:data.time.indexOf(radarPinnedTime);return Math.max(radarNowIndex(data),exact>=0?exact:Math.min(radarFrame,data.time.length-1)); }
@@ -190,9 +200,30 @@ async function loadHistory() {
   const controller=new AbortController();climateController=controller;busy.add(key);errors.delete(key);climateProgress='Historische Reihe wird vorbereitet …';render();
   try{const data=await fetchHistory(place,msg=>{climateProgress=msg;render();},controller.signal);live.set(key,data);await writeCache(key,data);}
   catch(error){errors.set(key,controller.signal.aborted?'Abruf abgebrochen. Vollständige Teilabrufe bleiben gespeichert.':message(error));}
-  finally{busy.delete(key);if(climateController===controller)climateController=undefined;render();}
+  finally{busy.delete(key);if(climateController===controller)climateController=undefined;render();if(temperatureActive())void loadTemperature();}
+}
+function temperatureActive(){return settings.view==='climate'&&climateTab==='temperature';}
+async function loadTemperature(){
+ if(settings.mode==='demo'||temperatureLoading)return;
+ temperatureLoading=true;
+ const place=settings.place,key=temperatureKey(place),options={...temperatureOptions};let controller:AbortController|undefined;
+ try{
+  if(!live.has(key)){const saved=await readCache<TemperatureArchive>(key);if(saved?.schema===1&&saved.mode==='live'&&saved.kind==='temperature-history')live.set(key,saved);}
+  if(settings.mode!=='live'||settings.place!==place)return;
+  const cached=live.get(key) as TemperatureArchive|undefined,years=new Map(cached?.years.map(y=>[y.year,y]));
+  if(!requiredYears(options).some(y=>temperatureNeedsFetch(years.get(y)))){temperatureProgress='';errors.delete(key);return;}
+  if(!navigator.onLine){temperatureProgress='';return;}
+  if(climateController){temperatureProgress='Wartet auf laufenden Datenabruf';return;}
+  if(!retryDue(attempts.get(key),now())&&errors.has(key))return;
+  attempts.set(key,now());controller=new AbortController();climateController=controller;busy.add(key);errors.delete(key);
+  temperatureProgress='Tageswerte werden geladen';render();
+  const data=await fetchTemperature(place,options,cached,controller.signal,(msg,partial)=>{temperatureProgress=msg;climateProgress=msg;if(partial)live.set(key,partial);render();});
+  live.set(key,data);temperatureProgress='';
+ }catch(e){if(!controller?.signal.aborted)errors.set(key,message(e));temperatureProgress='';}
+ finally{temperatureLoading=false;busy.delete(key);if(controller&&climateController===controller)climateController=undefined;render();if(temperatureActive()&&(place!==settings.place||JSON.stringify(options)!==JSON.stringify(temperatureOptions)))void loadTemperature();}
 }
 async function autoLoadAll(){
+ if(temperatureActive())void loadTemperature();
  if(backgroundLoading)return;
  backgroundLoading=true;const mode=settings.mode,place=settings.place;
  const stillCurrent=()=>settings.mode===mode&&settings.place===place;
@@ -203,12 +234,14 @@ async function autoLoadAll(){
   for(const key of [`history-v1-${place}`,`climate-v1-${place}`]){if(!live.has(key)){const cached=await readCache<Dataset>(key);if(cached?.schema===1&&cached.mode==='live')live.set(key,cached);}}
   await Promise.all([ensure(false,'weather'),ensure(false,'compare')]);
   if(!stillCurrent()||!navigator.onLine)return;
+  if(temperatureActive())return;
   const history=live.get(`history-v1-${place}`) as History|undefined;
   const historyKey=`history-v1-${place}`,climateKey=`climate-v1-${place}`;
   if(historyNeedsUpdate(history?.years.at(-1)?.year)&&retryDue(attempts.get(historyKey),now())){
    attempts.set(historyKey,now());backgroundMessage='Vergangenheit wird automatisch vorbereitet …';await loadHistory();
   }
   if(!stillCurrent()||!navigator.onLine)return;
+  if(temperatureActive())return;
   const climate=live.get(climateKey) as Climate|undefined;
   if((!climate||climate.models.length<3)&&retryDue(attempts.get(climateKey),now())){
    attempts.set(climateKey,now());backgroundMessage='Klimaprojektionen werden automatisch vorbereitet …';await loadClimate();
@@ -278,7 +311,7 @@ function selectPage(attribute:string,value:string){
  }else if(attribute==='weather-page'){
   weatherPage=value;render();
  }else if(attribute==='climate-tab'){
-  renderedView='';climateTab=value as typeof climateTab;render();void autoLoadAll();
+  renderedView='';climateTab=value as typeof climateTab;try{localStorage.setItem('wetterwarte-climate-tab',climateTab);}catch{}if(temperatureActive()){if(!temperatureLoading)climateController?.abort();void loadTemperature();}render();void autoLoadAll();
  }
 }
 installSwipeNavigation((scope,direction)=>{
@@ -332,6 +365,15 @@ app.addEventListener('click',event=>{
 });
 app.addEventListener('change',event=>{
   const target=event.target as HTMLSelectElement;
+  if(target.id.startsWith('temperature-')){
+   const field=target.id.slice('temperature-'.length);
+   if(field==='scale'&&['month','year','long'].includes(target.value))temperatureOptions.scale=target.value as typeof temperatureOptions.scale;
+   if(field==='reference'&&['rolling','normal'].includes(target.value))temperatureOptions.reference=target.value as typeof temperatureOptions.reference;
+   if(field==='plot'&&['curves','anomaly','spread'].includes(target.value))temperatureOptions.plot=target.value as typeof temperatureOptions.plot;
+   if(field==='year')temperatureOptions.year=Number(target.value);
+   if(field==='month')temperatureOptions.month=Number(target.value);
+   saveTemperatureOptions(temperatureOptions);render();void loadTemperature();return;
+  }
   if(target.id==='field-time'){fieldStep=Number(target.value);fieldPlaying=false;fieldWaiting=false;render();void prepareField();}
   if(target.id==='radar-time'){const data=radar();radarFrame=Number(target.value);radarPinnedTime=data?.time[radarFrame];radarPlaying=false;render();void prepareRadarFrame();}
   if(target.id==='history-year'){selectedYear=Number(target.value);render();}

@@ -34,6 +34,7 @@ Dieses Verzeichnis ist ein eigenständiges Unterprojekt. Das übergeordnete Star
 - **Radar:** echte DWD-RV-Kurzfristprognose bis zwei Stunden nach der Basismessung, durchgehende Zeitleiste, Abspielen/Pause und **Jetzt**. Jetzt folgt dem ersten verfügbaren Prognosezeitpunkt ab der Systemzeit im 5-Minuten-Raster. Die Anzeige nennt Prognosezeit und separat die zugrunde liegende Basismessung samt Alter. Durch die Lieferverzögerung bleiben weniger als zwei Stunden ab der aktuellen Uhrzeit. Die Systemuhr steht neben „Start“; die Karte kennzeichnet ihre eigene Zeit als Prognosezeit. Methodik und Quellen stehen in dieser README und `docs/methodik.md`. Die kommenden Bilder werden automatisch mit zwei parallelen Abrufen vorbereitet; Balken und Bildzähler zeigen den Stand. Abspielen wartet auf die vollständige Folge. Blau → Violett → Gelb kennzeichnet zunehmende Regenintensität. Fehlende Radardaten sind dezent schraffiert; regenfreie Gebiete bleiben ohne Schraffur.
 - **Klima → Karte:** historische DWD-Temperaturmittel 1961–1990 und 1991–2020, einzeln oder als Differenz. Tatsächliche Rasterdaten, keine Interpolation aus den drei auswählbaren Orten. Zellen lassen sich antippen. Differenzen: Blau–Weiß–Rot um null; absolute Mittel: gemeinsame fortlaufende Skala.
 - **Klima → Verlauf:** ERA5-Jahreswerte seit 1961, Abweichung gegenüber 1991–2020 und gleitendes Mittel der letzten zehn Jahre. Jahresauswahl zeigt Temperatur, heiße Tage und Niederschlag.
+- **Klima → Temperatur:** Monatsansicht mit Tageswerten, Jahresansicht mit Monatswerten und 30-Jahres-Ansicht mit Jahreswerten. Auf allen Displaygrößen eine große Grafik: **Abweichung** zeigt Balken gegenüber der genannten Referenz; **Kurven** zeigt Minimum (blau), Maximum (rot) und Mittelwert (dunkel); **Streuung** zeigt nur Mittelwert, gestricheltes Referenzmittel und ±1 Standardabweichung der vergleichbaren Referenzmittelwerte. Neue Einstellungen beginnen mit **30 Jahre → Klimanormal → Abweichung**; bestehende Auswahlen bleiben gespeichert. Daten sind ERA5-Reanalyse, keine Stationsmessungen.
 - **Klima → Zukunft:** Modellprojektionen 1995–2014 gegenüber 2030–2049. Temperatur und heiße Tage als Referenz-/Zukunftspunkte je Modell; Niederschlag als Punktgruppen je Jahreszeit mit Modellbandbreite. Nur das verfügbare HighResMIP-Szenario nahe RCP8.5.
 - **Modelle:** DWD ICON-EU-EPS und ECMWF AIFS, gemeinsame Sechs-Stunden-Zeitpunkte, Median und P10–P90 je Ensemble. Die Bänder zeigen Ensemble-Streuung.
 - **Uhr:** große dunkelgraue Uhrzeit, Datum und Wetter; keine zweite Uhr im Kopfbereich. Uhr und astronomisch berechnete Mondphase verwenden auch im Demo-Modus die wirkliche Systemzeit, angezeigt in Europe/Berlin.
@@ -47,6 +48,12 @@ Die vier Vorschaugrößen stehen außerhalb der Geräteoberfläche. **Neu: 480 �
 **Echte Daten** lädt alle Produkte für den gewählten Ort automatisch. Wetter alle 30 Minuten, Radar alle 5 Minuten, Ensembles alle 3 Stunden bei geöffneter App. Die erstmalige Historien- und Klimaverarbeitung läuft nacheinander im Hintergrund und dauert insgesamt ungefähr 5 Minuten, abhängig von Verbindung und API. Fortschritt steht unter dem Gerät. API-Pausen sind beabsichtigt.
 
 Feste Klimazeiträume bleiben dauerhaft gespeichert; die Historie wird um vollständige Jahre ergänzt. Erfolgreiche Teilabrufe werden wiederverwendet. Fehler bleiben sichtbar; neuer automatischer Versuch frühestens nach 15 Minuten. Nur einen App-Tab für umfangreiche Erstabrufe verwenden. Browserdaten können durch Speicherbereinigung verloren gehen.
+
+Die neue Temperaturstatistik lädt beim ersten Öffnen automatisch Tagesmittel/-minima/-maxima: zuerst das ausgewählte Jahr, danach die Referenz in Blöcken von höchstens zehn Jahren. Der Erstabruf kann wegen API-Pausen einige Minuten dauern. Jeder erfolgreiche Block bleibt dauerhaft in IndexedDB; laufende/unvollständige Jahre werden höchstens täglich nachgeladen. ERA5 liegt etwa fünf Tage hinter der Gegenwart. Fehlende Tage werden nicht aus der Wettervorhersage ergänzt.
+
+**„Letzte 30 J.“** ist eine jährlich mitwandernde Referenz der letzten 30 vollständig verfügbaren Kalenderjahre: 2026 → 1996–2025, 2029 → 1999–2028. Am Jahresanfang wird die Datenverzögerung berücksichtigt. **„Klimanormal“** verwendet eine dekadenweise aktualisierte Referenz: derzeit 1991–2020, nach vollständiger Verfügbarkeit von 2030 dann 2001–2030. Beide Varianten nennen ihre Jahre im Plot. Fehlende Referenzjahre verhindern die Anzeige des Bands und der Abweichung. Der bestehende langfristige Verlauf behält für vergleichbare Klimaänderungen seine feste Referenz; die Auswahl gilt für die neue Temperaturstatistik. Details und Grenzen: [Methodik](docs/methodik.md#temperaturstatistik-und-referenzzeitraum).
+
+Im gemeinsamen Pi-Startmenü lässt sich die Oberfläche über **Start → Neu laden** neu starten, auch ohne Browserleiste im Kiosk. Einstellungen, letzte Temperaturauswahl und gespeicherte Daten bleiben erhalten; laufendes Radio wird beendet. Die Aktualisierungsintervalle und der dauerhafte Datencache gelten weiter. Die Taste erzwingt keinen erneuten Abruf aller historischen Daten.
 
 Demo-Wetter und Demo-Klima sind synthetisch und getrennt von echten Daten. Netzfehler führen nie zu einem stillen Wechsel auf Beispieldaten. Diese README und `docs/methodik.md` erklären Quellen, Einheiten und Grenzen. Der Info-Dialog wurde entfernt. **JSON exportieren** enthält Herkunft und Datenmodus.
 
@@ -63,10 +70,12 @@ Datenabruf in `src/data/`, Berechnungen in `src/calc.ts`, SVG-Darstellung in `sr
 ```sh
 npm test
 npm run test:browser
+node tests/temperature-browser.mjs # gemeinsame Vorschau :5173 muss laufen
+node tests/temperature-browser.mjs webkit # unsichtbare WebKit-Prüfung, kein Safari-Dialog
 node tests/production-offline.mjs   # Produktionsvorschau muss laufen
 ```
 
-Browserprüfungen verwenden installiertes Google Chrome. 16 Rechentests und 11 Browserszenarien prüfen Größen, Überlauf, Einheiten, Farben, Uhrzeit, Auswahl, Export, Cache, Netzfehler und automatisches Laden. Screenshots liegen in `test-results/`.
+Browserprüfungen verwenden installiertes Google Chrome. 25 Rechentests und die bestehenden Browserszenarien prüfen Größen, Überlauf, Einheiten, Farben, Uhrzeit, Auswahl, Export, Cache, Netzfehler und automatisches Laden. Screenshots liegen in `test-results/`.
 
 Optionaler echter Wetter-/Radartest ohne umfangreiche Klimaabfragen:
 
@@ -74,7 +83,7 @@ Optionaler echter Wetter-/Radartest ohne umfangreiche Klimaabfragen:
 node tests/weather-radar-live.mjs
 ```
 
-`tests/live-smoke.mjs` und `tests/radar-history-live.mjs` laden auch umfangreiche echte Daten und verbrauchen entsprechendes API-Kontingent. Wetter-/Ensemble-/Klimamodellkennungen wurden am 7.10.2026, neue Radarfarben und Klimaraster am 8.10.2026 geprüft. Quellen und Veränderungen sind in der Methodik dokumentiert. Kein Repository wurde hochgeladen, keine Cloud-Ressource angelegt.
+`tests/live-smoke.mjs` und `tests/radar-history-live.mjs` laden auch umfangreiche echte Daten und verbrauchen entsprechendes API-Kontingent. Wetter-/Ensemble-/Klimamodellkennungen wurden am 7.10.2026, neue Radarfarben und Klimaraster am 8.10.2026 geprüft. Quellen und Veränderungen sind in der Methodik dokumentiert. Die Anwendung benötigt keinen Cloud-Dienst.
 
 
 ### Retina und physische Displaygröße
@@ -96,6 +105,8 @@ Unter **Radar** stehen die Ebenen Regen, Temperatur, Wind und Luftqualität zur 
 - **Temperatur:** echtes DWD-WMS-Feld `Icon-eu_reg00625_fd_gl_T`, 2 m Höhe, ICON-EU 0,0625°, stündliche Ausgabe. Offizielle diskrete ISA-Farbskala in °C; keine Interpolation aus Ortswerten.
 - **Wind:** echtes DWD-WMS-Feld `Icon-eps_reg025_fd_pl_SP10M`, 10 m Höhe, ICON-EPS 0,25°, sechsstündliche Ausgabe. Explizites Ensembleprodukt `Probabilities:>10m/s`: **Wahrscheinlichkeit in % für Wind über 36 km/h**, keine Geschwindigkeitsskala und keine Böenkarte. Die originale DWD-Wahrscheinlichkeitsskala wird verwendet.
 - **Luftqualität:** [CAMS Europa über Open-Meteo](https://open-meteo.com/en/docs/air-quality-api), `domains=cams_europe`, ca. 11 km, stündliche Ortswerte für EAQI und PM₂,₅ in µg/m³. Die Geografie zeigt die Orte, keine erfundene Flächenverteilung. Es handelt sich um Modellwerte. Quellen: CAMS ENSEMBLE / Open-Meteo, CC BY 4.0.
+
+**Lesen der Wind- und Luftkarte:** Bei Wind bleibt eine Wahrscheinlichkeit unter 1 % im originalen DWD-Raster nahezu transparent; eine farblose Fläche bedeutet daher nicht automatisch einen Ladefehler oder Windstille. „Windchance“ und „Farblos: < 1 %“ stehen an der Karte. Bei Luftqualität kennzeichnet die Farbe ausschließlich den EAQI am Ort, nicht PM₂,₅: 0–20, über 20–40, über 40–60, über 60–80, über 80–100 und über 100. Der letzte Bereich ist nach oben offen. PM₂,₅ steht separat in µg/m³ für den ausgewählten Ort. Die Marker behalten 12 native Pixel Durchmesser (ausgewählter Ort 16), unabhängig vom Kartenmaßstab; das ist eine Symbolgröße, kein räumlicher Gültigkeitsradius. Position, Größe, Richtung und bestehende Farben der senkrechten Skalen bleiben für alle Karten unverändert.
 
 DWD-Metadaten und Erstbilder werden beim Start vorbereitet und stündlich geprüft, Luftqualität alle sechs Stunden. Weitere Kartenzeiten werden automatisch vorgeladen; Fortschritt und Lücken sind sichtbar. Wetterkarten reichen höchstens 48 Stunden, in ihrer nativen Ausgabeauflösung. Quelle und Modelllauf stehen an der Karte. PNGs und Metadaten liegen dauerhaft in IndexedDB; bei einem neuen erfolgreich geladenen Lauf werden alte Feldbilder entfernt. Demo-Felder sind ausdrücklich synthetisch und werden getrennt erzeugt. Ausfälle zeigen gespeicherte Werte und Fehlermeldungen.
 

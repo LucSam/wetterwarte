@@ -26,5 +26,15 @@ export function fitRegionalMaps(){
   const labelSize=svg.closest('.size-480x320')?16:width>=1000?18:15,scale=height/h;
   svg.style.setProperty('--radar-label-size',`${labelSize/scale}px`);
   svg.style.setProperty('--radar-label-halo',`${2/scale}px`);
+  // Point symbols denote queried locations, not spatial coverage. Keep them
+  // legible in native display pixels, independently of map extent and size.
+  svg.querySelectorAll<SVGGElement>('.air-point').forEach(point=>{
+   const circle=point.querySelector('circle')!,text=point.querySelector('text')!,value=point.querySelector('tspan')!;
+   const radius=point.dataset.selected==='true'?8:6,cx=circle.cx.baseVal.value,cy=circle.cy.baseVal.value;
+   const x=cx+(point.dataset.place==='berlin'?1:-1)*(radius+6)/scale;
+   const y=cy+(point.dataset.place==='potsdam'?radius+labelSize+4:-(radius+labelSize+4))/scale;
+   circle.setAttribute('r',String(radius/scale));circle.style.strokeWidth=`${1.5/scale}px`;
+   text.setAttribute('x',String(x));text.setAttribute('y',String(y));value.setAttribute('x',String(x));
+  });
  });
 }
